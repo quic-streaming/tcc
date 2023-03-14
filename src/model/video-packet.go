@@ -12,5 +12,5 @@ type VideoPacketResponse struct {
 	Bitrate  Bitrate
 	Segment  int
 	Tile     int
-	Data     [1024]byte
+	Data     []byte
 }

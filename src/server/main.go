@@ -12,7 +12,7 @@ import (
 	"log"
 	"main/src/model"
 	"math/big"
-	"unsafe"
+	"os"
 
 	"github.com/lucas-clemente/quic-go"
 )
@@ -44,35 +44,46 @@ func main() {
 }
 
 func handleStream(connection quic.Connection) {
+	// open stream
 	stream, err := connection.AcceptStream(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
+	streamId := stream.StreamID()
 
-	var req model.VideoPacketRequest
-	reqBytes := make([]byte, unsafe.Sizeof(req))
-	if _, err = stream.Read(reqBytes); err != nil {
+	// read file
+	basePath, err := os.Getwd()
+	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Server: Got '%+v'\n", req)
+	data, err := os.ReadFile(basePath + "/data/segments/video_tiled_7_dash_track126_3.m4s")
+	if err != nil {
+		log.Fatal(err)
+	}
+	_ = data
 
+	// receive file request
+	var req model.VideoPacketRequest
+	if err = json.NewDecoder(stream).Decode(&req); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Server stream %d: Got '%+v'\n", streamId, req)
+
+	// send file response
 	res := model.VideoPacketResponse{
 		Priority: req.Priority,
 		Bitrate:  req.Bitrate,
 		Segment:  req.Segment,
 		Tile:     req.Tile,
-		Data:     [1024]byte{},
+		// Data:     data,
 	}
 
-	fmt.Printf("Server: Sending '%+v'\n", res)
-	resBytes, err := json.Marshal(res)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if _, err = stream.Write(resBytes); err != nil {
+	fmt.Printf("Server stream %d: Sending '%+v'\n", streamId, res)
+	if json.NewEncoder(stream).Encode(&res); err != nil {
 		log.Fatal(err)
 	}
 
+	// close stream
 	stream.Close()
 }
 

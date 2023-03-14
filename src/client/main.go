@@ -5,11 +5,9 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"main/src/model"
 	"sync"
-	"unsafe"
 
 	"github.com/lucas-clemente/quic-go"
 )
@@ -66,33 +64,27 @@ func handleStream(connection quic.Connection, priority model.Priority) {
 		Tile:     0,
 	}
 
+	// create stream
 	stream, err := connection.OpenStreamSync(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	streamId := stream.StreamID()
 
-	fmt.Printf("Client %d: Sending '%+v'\n", streamId, req)
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if _, err = stream.Write(reqBytes); err != nil {
+	// send file request
+	fmt.Printf("Client stream %d: Sending '%+v'\n", streamId, req)
+	if json.NewEncoder(stream).Encode(&req); err != nil {
 		log.Fatal(err)
 	}
 
+	// receive file response
 	var res model.VideoPacketResponse
-	resBytes := make([]byte, unsafe.Sizeof(res))
-
-	if _, err = io.ReadFull(stream, resBytes); err != nil {
+	if err = json.NewDecoder(stream).Decode(&res); err != nil {
 		log.Fatal(err)
 	}
-	if err = json.Unmarshal(resBytes, &res); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Client %d: Got '%+v'\n", streamId, res)
+	fmt.Printf("Client stream %d: Got '%+v'\n", streamId, res)
 
+	// close stream
 	stream.Close()
 }
 
